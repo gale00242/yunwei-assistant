@@ -1,7 +1,7 @@
 """
 FastAPI Web 应用
 """
-from fastapi import FastAPI, Request, Form, HTTPException
+from fastapi import FastAPI, Request, Form, HTTPException, Cookie
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -9,16 +9,18 @@ from contextlib import asynccontextmanager
 import asyncio
 from datetime import datetime
 from pathlib import Path
+from typing import List, Optional
 
 from app.database import init_db, get_servers, get_server, add_server, update_server, delete_server
 from app.database import get_latest_metrics, get_thresholds, update_threshold
 from app.database import get_active_alerts, resolve_alert
-from app.database import get_batch_commands, save_batch_command
+from app.database import get_batch_commands, save_batch_command, clear_batch_commands, get_batch_commands_count
 from app.database import save_container_config, get_container_configs
 from app.collector import collect_all, collect_docker_containers, execute_container_command, get_container_logs
 from app.alerter import process_alerts, format_alert_message
 from app.notifier import init_notifier, get_notifier
 from app.ssh_client import ssh_client
+from app.auth import verify_password, create_session, get_session, delete_session, is_valid_session
 
 # 配置
 BASE_DIR = Path(__file__).parent  # web 目录
@@ -27,6 +29,17 @@ PROJECT_DIR = APP_DIR.parent  # 项目根目录
 TEMPLATES_DIR = BASE_DIR / "templates"
 STATIC_DIR = BASE_DIR / "static"
 DATA_DIR = PROJECT_DIR / "data"
+KEYS_DIR = DATA_DIR / "keys"
+
+
+def get_key_files() -> List[str]:
+    """获取可用的密钥文件列表"""
+    key_files = []
+    if KEYS_DIR.exists():
+        for f in KEYS_DIR.iterdir():
+            if f.is_file() and not f.name.startswith('.'):
+                key_files.append(f.name)
+    return sorted(key_files)
 
 # 全局变量
 scheduler_task = None
@@ -63,6 +76,100 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 
+# ============ 认证相关 ============
+
+# 不需要认证的路径
+PUBLIC_PATHS = ["/login", "/static", "/favicon.ico"]
+
+
+async def get_current_user(request: Request, session_token: Optional[str] = Cookie(None)) -> Optional[str]:
+    """获取当前登录用户"""
+    if not session_token:
+        return None
+    session = get_session(session_token)
+    if not session:
+        return None
+    return session.get("username")
+
+
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    """认证中间件"""
+    path = request.url.path
+    
+    # 静态文件和登录页面不需要认证
+    if path.startswith("/static") or path == "/login" or path == "/favicon.ico":
+        return await call_next(request)
+    
+    # 检查 session
+    session_token = request.cookies.get("session_token")
+    if not session_token or not is_valid_session(session_token):
+        # API 请求返回 401
+        if path.startswith("/api"):
+            return JSONResponse({"error": "未授权"}, status_code=401)
+        # 页面请求重定向到登录
+        return RedirectResponse(url="/login", status_code=302)
+    
+    return await call_next(request)
+
+
+@app.get("/login", response_class=HTMLResponse)
+async def login_page(request: Request, error: str = None):
+    """登录页面"""
+    # 已登录则跳转首页
+    session_token = request.cookies.get("session_token")
+    if session_token and is_valid_session(session_token):
+        return RedirectResponse(url="/", status_code=302)
+    
+    return templates.TemplateResponse("login.html", {
+        "request": request,
+        "error": error
+    })
+
+
+@app.post("/login")
+async def login_submit(
+    request: Request,
+    username: str = Form(...),
+    password: str = Form(...)
+):
+    """处理登录"""
+    if not verify_password(username, password):
+        return templates.TemplateResponse("login.html", {
+            "request": request,
+            "error": "用户名或密码错误"
+        })
+    
+    # 创建 session
+    token = create_session(username)
+    
+    # 重定向到首页，设置 cookie
+    response = RedirectResponse(url="/", status_code=302)
+    response.set_cookie(
+        key="session_token",
+        value=token,
+        httponly=True,
+        max_age=24 * 60 * 60,  # 24 小时
+        samesite="lax"
+    )
+    return response
+
+
+@app.get("/logout")
+async def logout(request: Request):
+    """登出"""
+    session_token = request.cookies.get("session_token")
+    if session_token:
+        delete_session(session_token)
+    
+    response = RedirectResponse(url="/login", status_code=302)
+    response.delete_cookie("session_token")
+    return response
+
+
+# ============ 原有路由 ============
+
+
 async def load_config():
     """加载配置"""
     import yaml
@@ -90,7 +197,7 @@ async def scheduled_collection():
             for server in servers:
                 try:
                     metrics = await collect_all(server)
-                    from database import save_metrics
+                    from app.database import save_metrics
                     await save_metrics(
                         server_id=server['id'],
                         cpu_percent=metrics['cpu'],
@@ -128,6 +235,7 @@ async def index(request: Request):
     servers = await get_servers(enabled_only=False)
     alerts = await get_active_alerts()
     thresholds = await get_thresholds()
+    config = await load_config()
     
     # 获取每个服务器的最新指标
     server_metrics = {}
@@ -141,7 +249,8 @@ async def index(request: Request):
         "servers": servers,
         "alerts": alerts,
         "thresholds": thresholds,
-        "server_metrics": server_metrics
+        "server_metrics": server_metrics,
+        "collect_interval": config.get('collect_interval', 30)
     })
 
 
@@ -161,7 +270,8 @@ async def add_server_page(request: Request):
     return templates.TemplateResponse("server_form.html", {
         "request": request,
         "server": None,
-        "is_edit": False
+        "is_edit": False,
+        "key_files": get_key_files()
     })
 
 
@@ -195,6 +305,26 @@ async def add_server_submit(
         password=password or None,
         enabled=enabled
     )
+    
+    # 采集新服务器数据
+    server = await get_server(server_id)
+    if server:
+        try:
+            metrics = await collect_all(server)
+            from app.database import save_metrics
+            await save_metrics(
+                server_id=server_id,
+                cpu_percent=metrics['cpu'],
+                memory_percent=metrics['memory_percent'],
+                memory_used=metrics['memory_used'],
+                memory_total=metrics['memory_total'],
+                disk_data=metrics['disks']
+            )
+        except Exception as e:
+            print(f"添加服务器后采集失败: {e}")
+        finally:
+            ssh_client.disconnect(server_id)
+    
     return RedirectResponse(url=f"/servers/{server_id}", status_code=303)
 
 
@@ -230,7 +360,8 @@ async def edit_server_page(request: Request, server_id: int):
     return templates.TemplateResponse("server_form.html", {
         "request": request,
         "server": server,
-        "is_edit": True
+        "is_edit": True,
+        "key_files": get_key_files()
     })
 
 
@@ -280,10 +411,12 @@ async def commands_page(request: Request):
     """批量命令页面"""
     servers = await get_servers(enabled_only=True)
     history = await get_batch_commands(limit=20)
+    history_count = await get_batch_commands_count()
     return templates.TemplateResponse("commands.html", {
         "request": request,
         "servers": servers,
-        "history": history
+        "history": history,
+        "history_count": history_count
     })
 
 
@@ -322,31 +455,36 @@ async def execute_command(request: Request):
     return JSONResponse({"results": results})
 
 
+@app.post("/api/commands/clear")
+async def clear_commands_history():
+    """清空命令历史"""
+    count = await clear_batch_commands()
+    return JSONResponse({"success": True, "deleted": count})
+
+
 @app.get("/containers", response_class=HTMLResponse)
 async def containers_page(request: Request):
     """容器管理页面"""
     servers = await get_servers(enabled_only=True)
-    server_containers = {}
-    
-    for server in servers:
-        try:
-            containers = await collect_docker_containers(server)
-            server_containers[server['id']] = {
-                "server": server,
-                "containers": containers
-            }
-            ssh_client.disconnect(server['id'])
-        except Exception as e:
-            server_containers[server['id']] = {
-                "server": server,
-                "containers": [],
-                "error": str(e)
-            }
-    
     return templates.TemplateResponse("containers.html", {
         "request": request,
-        "server_containers": server_containers
+        "servers": servers
     })
+
+
+@app.get("/api/servers/{server_id}/containers")
+async def get_server_containers(server_id: int):
+    """获取服务器容器列表 API"""
+    server = await get_server(server_id)
+    if not server:
+        return JSONResponse({"error": "服务器不存在"}, status_code=404)
+    
+    try:
+        containers = await collect_docker_containers(server)
+        ssh_client.disconnect(server_id)
+        return JSONResponse({"containers": containers})
+    except Exception as e:
+        return JSONResponse({"error": str(e)})
 
 
 @app.post("/api/containers/{server_id}/{container_name}/command")
@@ -388,6 +526,68 @@ async def container_logs(server_id: int, container_name: str, lines: int = 100):
         return JSONResponse({"logs": logs})
     except Exception as e:
         return JSONResponse({"error": str(e)})
+
+
+@app.post("/api/containers/{server_id}/{container_name}/restart")
+async def restart_container_api(server_id: int, container_name: str):
+    """重启容器"""
+    server = await get_server(server_id)
+    if not server:
+        return JSONResponse({"error": "服务器不存在"}, status_code=404)
+    
+    try:
+        from app.collector import restart_container, get_container_logs
+        exit_code, stdout, stderr = await restart_container(server, container_name)
+        ssh_client.disconnect(server_id)
+        
+        # 获取重启后的日志
+        logs = await get_container_logs(server, container_name, 100)
+        
+        return JSONResponse({
+            "success": exit_code == 0,
+            "message": "容器已重启",
+            "logs": logs
+        })
+    except Exception as e:
+        return JSONResponse({"success": False, "error": str(e)})
+
+
+@app.post("/api/containers/{server_id}/{container_name}/stop")
+async def stop_container_api(server_id: int, container_name: str):
+    """停止容器"""
+    server = await get_server(server_id)
+    if not server:
+        return JSONResponse({"error": "服务器不存在"}, status_code=404)
+    
+    try:
+        from app.collector import stop_container
+        exit_code, stdout, stderr = await stop_container(server, container_name)
+        ssh_client.disconnect(server_id)
+        return JSONResponse({
+            "success": exit_code == 0,
+            "message": stdout or stderr
+        })
+    except Exception as e:
+        return JSONResponse({"success": False, "error": str(e)})
+
+
+@app.post("/api/containers/{server_id}/{container_name}/start")
+async def start_container_api(server_id: int, container_name: str):
+    """启动容器"""
+    server = await get_server(server_id)
+    if not server:
+        return JSONResponse({"error": "服务器不存在"}, status_code=404)
+    
+    try:
+        from app.collector import start_container
+        exit_code, stdout, stderr = await start_container(server, container_name)
+        ssh_client.disconnect(server_id)
+        return JSONResponse({
+            "success": exit_code == 0,
+            "message": stdout or stderr
+        })
+    except Exception as e:
+        return JSONResponse({"success": False, "error": str(e)})
 
 
 @app.get("/alerts", response_class=HTMLResponse)
@@ -468,24 +668,38 @@ async def api_get_metrics(server_id: int):
 
 @app.post("/api/collect")
 async def api_collect_now():
-    """立即采集一次"""
+    """立即采集一次 - 优先采集未知状态的服务器，若无则采集全部"""
     servers = await get_servers(enabled_only=True)
     results = []
     
+    # 找出未知状态的服务器（没有历史数据）
+    unknown_servers = []
+    known_servers = []
+    
     for server in servers:
+        metrics = await get_latest_metrics(server['id'])
+        if metrics:
+            known_servers.append(server)
+        else:
+            unknown_servers.append(server)
+    
+    # 决定采集哪些服务器
+    servers_to_collect = unknown_servers if unknown_servers else servers
+    
+    for server in servers_to_collect:
         try:
-            metrics = await collect_all(server)
-            from database import save_metrics
+            collected = await collect_all(server)
+            from app.database import save_metrics
             await save_metrics(
                 server_id=server['id'],
-                cpu_percent=metrics['cpu'],
-                memory_percent=metrics['memory_percent'],
-                memory_used=metrics['memory_used'],
-                memory_total=metrics['memory_total'],
-                disk_data=metrics['disks']
+                cpu_percent=collected['cpu'],
+                memory_percent=collected['memory_percent'],
+                memory_used=collected['memory_used'],
+                memory_total=collected['memory_total'],
+                disk_data=collected['disks']
             )
             
-            alerts = await process_alerts(server, metrics)
+            alerts = await process_alerts(server, collected)
             if alerts:
                 notifier = get_notifier()
                 if notifier:
@@ -493,11 +707,20 @@ async def api_collect_now():
                     await notifier.send_alert(message)
             
             ssh_client.disconnect(server['id'])
-            results.append({"server": server['name'], "success": True, "metrics": metrics})
+            results.append({"server": server['name'], "success": True, "metrics": collected})
         except Exception as e:
             results.append({"server": server['name'], "success": False, "error": str(e)})
     
-    return JSONResponse({"results": results})
+    # 返回结果
+    if unknown_servers:
+        message = f"采集 {len(results)} 台未知状态服务器"
+    else:
+        message = f"所有服务器已有数据，重新采集全部 {len(results)} 台"
+    
+    return JSONResponse({
+        "results": results,
+        "message": message
+    })
 
 
 if __name__ == "__main__":

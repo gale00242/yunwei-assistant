@@ -171,3 +171,36 @@ async def get_container_logs(
     command = f"docker logs --tail {lines} {container_name}"
     exit_code, stdout, stderr = await ssh_client.execute_async(server, command)
     return stdout + stderr
+
+
+async def restart_container(
+    server: Dict[str, Any],
+    container_name: str
+) -> Tuple[int, str, str]:
+    """
+    重启容器
+    """
+    command = f"docker restart {container_name}"
+    return await ssh_client.execute_async(server, command)
+
+
+async def stop_container(
+    server: Dict[str, Any],
+    container_name: str
+) -> Tuple[int, str, str]:
+    """
+    停止容器
+    """
+    command = f"docker stop {container_name}"
+    return await ssh_client.execute_async(server, command)
+
+
+async def start_container(
+    server: Dict[str, Any],
+    container_name: str
+) -> Tuple[int, str, str]:
+    """
+    启动容器
+    """
+    command = f"docker start {container_name}"
+    return await ssh_client.execute_async(server, command)

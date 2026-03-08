@@ -6,6 +6,10 @@
     <title>{% block title %}运维助手{% endblock %}</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script>
+        // 确保 HTMX 请求携带 credentials (cookies)
+        htmx.config.withCredentials = true;
+    </script>
     <style>
         .htmx-request .htmx-indicator { display: inline-block; }
         .htmx-indicator { display: none; }
@@ -38,6 +42,9 @@
                         <span class="ml-1 bg-red-500 text-white text-xs rounded-full px-2">{{ alerts_count }}</span>
                     </a>
                     {% endif %}
+                    <a href="/logout" class="flex items-center text-gray-300 hover:text-white">
+                        <span class="text-sm">退出</span>
+                    </a>
                 </div>
             </div>
         </div>

@@ -357,6 +357,22 @@ async def get_batch_commands(limit: int = 50) -> List[Dict[str, Any]]:
         return results
 
 
+async def clear_batch_commands() -> int:
+    """清空批量命令历史"""
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute("DELETE FROM batch_commands")
+        await db.commit()
+        return cursor.rowcount
+
+
+async def get_batch_commands_count() -> int:
+    """获取批量命令历史数量"""
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute("SELECT COUNT(*) FROM batch_commands")
+        result = await cursor.fetchone()
+        return result[0] if result else 0
+
+
 # ============ 容器配置操作 ============
 
 async def save_container_config(
