@@ -229,8 +229,59 @@ async def scheduled_collection():
 
 # ============ 页面路由 ============
 
+@app.post("/collect")
+async def collect_page(request: Request):
+    """立即采集 - 表单提交版本，采集完成后重定向到首页"""
+    # 检查认证
+    session_token = request.cookies.get("session_token")
+    if not session_token or not is_valid_session(session_token):
+        return RedirectResponse(url="/login", status_code=302)
+    
+    servers = await get_servers(enabled_only=True)
+    results = []
+    
+    # 找出未知状态的服务器
+    unknown_servers = []
+    for server in servers:
+        metrics = await get_latest_metrics(server['id'])
+        if not metrics:
+            unknown_servers.append(server)
+    
+    servers_to_collect = unknown_servers if unknown_servers else servers
+    
+    success_count = 0
+    fail_count = 0
+    
+    for server in servers_to_collect:
+        try:
+            collected = await collect_all(server)
+            from app.database import save_metrics
+            await save_metrics(
+                server_id=server['id'],
+                cpu_percent=collected['cpu'],
+                memory_percent=collected['memory_percent'],
+                memory_used=collected['memory_used'],
+                memory_total=collected['memory_total'],
+                disk_data=collected['disks']
+            )
+            ssh_client.disconnect(server['id'])
+            results.append({"server": server['name'], "success": True, "metrics": collected})
+            success_count += 1
+        except Exception as e:
+            results.append({"server": server['name'], "success": False, "error": str(e)})
+            fail_count += 1
+    
+    # 重定向到首页，带结果参数
+    from urllib.parse import urlencode
+    params = {
+        "collected": success_count,
+        "failed": fail_count
+    }
+    return RedirectResponse(url=f"/?{urlencode(params)}", status_code=302)
+
+
 @app.get("/", response_class=HTMLResponse)
-async def index(request: Request):
+async def index(request: Request, collected: int = 0, failed: int = 0):
     """首页 - 仪表盘"""
     servers = await get_servers(enabled_only=False)
     alerts = await get_active_alerts()
@@ -244,13 +295,22 @@ async def index(request: Request):
         if metrics:
             server_metrics[server['id']] = metrics
     
+    # 构建采集结果
+    collect_result = None
+    if collected > 0 or failed > 0:
+        collect_result = {
+            "message": f"采集完成：成功 {collected} 台，失败 {failed} 台",
+            "success": failed == 0
+        }
+    
     return templates.TemplateResponse("index.html", {
         "request": request,
         "servers": servers,
         "alerts": alerts,
         "thresholds": thresholds,
         "server_metrics": server_metrics,
-        "collect_interval": config.get('collect_interval', 30)
+        "collect_interval": config.get('collect_interval', 30),
+        "collect_result": collect_result
     })
 
 
