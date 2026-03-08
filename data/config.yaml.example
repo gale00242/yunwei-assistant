@@ -1,0 +1,6 @@
+# Telegram 通知配置
+telegram_bot_token: ""
+telegram_chat_id: ""
+
+# 采集间隔（分钟）
+collect_interval: 30

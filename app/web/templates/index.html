@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+{% block title %}仪表盘 - 运维助手{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- 概览卡片 -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center">
+                <div class="text-3xl mr-4">🖥️</div>
+                <div>
+                    <div class="text-gray-500 text-sm">服务器总数</div>
+                    <div class="text-2xl font-bold">{{ servers|length }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center">
+                <div class="text-3xl mr-4">✅</div>
+                <div>
+                    <div class="text-gray-500 text-sm">正常运行</div>
+                    <div class="text-2xl font-bold text-green-600">{{ servers|selectattr('enabled', 'equalto', 1)|list|length }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center">
+                <div class="text-3xl mr-4">🚨</div>
+                <div>
+                    <div class="text-gray-500 text-sm">活动告警</div>
+                    <div class="text-2xl font-bold {% if alerts|length > 0 %}text-red-600{% else %}text-green-600{% endif %}">{{ alerts|length }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center">
+                <div class="text-3xl mr-4">📊</div>
+                <div>
+                    <div class="text-gray-500 text-sm">采集周期</div>
+                    <div class="text-2xl font-bold">30分钟</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 操作按钮 -->
+    <div class="flex space-x-4">
+        <button hx-post="/api/collect" 
+                hx-target="#collect-result"
+                hx-indicator="#collect-indicator"
+                class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded flex items-center">
+            <span id="collect-indicator" class="htmx-indicator mr-2">
+                <svg class="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+            </span>
+            立即采集
+        </button>
+        <a href="/servers/add" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded">
+            + 添加服务器
+        </a>
+    </div>
+    <div id="collect-result" class="mt-2"></div>
+
+    <!-- 告警列表 -->
+    {% if alerts %}
+    <div class="bg-white rounded-lg shadow">
+        <div class="px-6 py-4 border-b">
+            <h2 class="text-lg font-semibold flex items-center">
+                <span class="text-xl mr-2">🚨</span>
+                活动告警
+            </h2>
+        </div>
+        <div class="divide-y">
+            {% for alert in alerts %}
+            <div class="px-6 py-4 flex items-center justify-between hover:bg-gray-50">
+                <div class="flex items-center">
+                    <span class="text-2xl mr-3">{% if alert.alert_type == 'cpu' %}💻{% elif alert.alert_type == 'memory' %}🧠{% else %}💾{% endif %}</span>
+                    <div>
+                        <div class="font-medium">{{ alert.server_name }} ({{ alert.host }})</div>
+                        <div class="text-sm text-gray-500">{{ alert.message }}</div>
+                        <div class="text-xs text-gray-400">{{ alert.created_at }}</div>
+                    </div>
+                </div>
+                <form action="/alerts/{{ alert.id }}/resolve" method="post">
+                    <button type="submit" class="text-green-500 hover:text-green-700">标记已解决</button>
+                </form>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- 服务器状态 -->
+    <div class="bg-white rounded-lg shadow">
+        <div class="px-6 py-4 border-b flex justify-between items-center">
+            <h2 class="text-lg font-semibold">服务器状态</h2>
+            <a href="/servers" class="text-blue-500 hover:text-blue-700 text-sm">查看全部 →</a>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">服务器</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">状态</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">CPU</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">内存</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">磁盘</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y">
+                    {% for server in servers %}
+                    {% set metrics = server_metrics.get(server.id) %}
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-6 py-4">
+                            <a href="/servers/{{ server.id }}" class="text-blue-500 hover:text-blue-700 font-medium">
+                                {{ server.name }}
+                            </a>
+                            <div class="text-sm text-gray-500">{{ server.host }}:{{ server.port }}</div>
+                        </td>
+                        <td class="px-6 py-4">
+                            {% if server.enabled %}
+                            {% if metrics %}
+                            <span class="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">在线</span>
+                            {% else %}
+                            <span class="px-2 py-1 text-xs rounded-full bg-yellow-100 text-yellow-800">未知</span>
+                            {% endif %}
+                            {% else %}
+                            <span class="px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-800">已禁用</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4">
+                            {% if metrics %}
+                            <div class="flex items-center">
+                                <div class="w-16 bg-gray-200 rounded-full h-2 mr-2">
+                                    <div class="h-2 rounded-full {% if metrics.cpu_percent >= 90 %}bg-red-500{% elif metrics.cpu_percent >= 80 %}bg-yellow-500{% else %}bg-green-500{% endif %}" style="width: {{ metrics.cpu_percent }}%"></div>
+                                </div>
+                                <span class="text-sm">{{ metrics.cpu_percent }}%</span>
+                            </div>
+                            {% else %}
+                            <span class="text-gray-400">-</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4">
+                            {% if metrics %}
+                            <div class="flex items-center">
+                                <div class="w-16 bg-gray-200 rounded-full h-2 mr-2">
+                                    <div class="h-2 rounded-full {% if metrics.memory_percent >= 90 %}bg-red-500{% elif metrics.memory_percent >= 80 %}bg-yellow-500{% else %}bg-green-500{% endif %}" style="width: {{ metrics.memory_percent }}%"></div>
+                                </div>
+                                <span class="text-sm">{{ metrics.memory_percent }}%</span>
+                            </div>
+                            <div class="text-xs text-gray-500">{{ metrics.memory_used }}MB / {{ metrics.memory_total }}MB</div>
+                            {% else %}
+                            <span class="text-gray-400">-</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4">
+                            {% if metrics and metrics.disk_data %}
+                            {% for disk in metrics.disk_data %}
+                            <div class="flex items-center text-sm mb-1">
+                                <span class="w-20 truncate" title="{{ disk.mount }}">{{ disk.mount }}</span>
+                                <div class="w-12 bg-gray-200 rounded-full h-2 mx-2">
+                                    <div class="h-2 rounded-full {% if disk.percent >= 95 %}bg-red-500{% elif disk.percent >= 85 %}bg-yellow-500{% else %}bg-green-500{% endif %}" style="width: {{ disk.percent }}%"></div>
+                                </div>
+                                <span>{{ disk.percent }}%</span>
+                            </div>
+                            {% endfor %}
+                            {% else %}
+                            <span class="text-gray-400">-</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

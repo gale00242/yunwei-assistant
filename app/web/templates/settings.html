@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+{% block title %}设置 - 运维助手{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto space-y-6">
+    <h1 class="text-2xl font-bold">系统设置</h1>
+
+    <!-- Telegram 通知配置 -->
+    <div class="bg-white rounded-lg shadow p-6">
+        <h2 class="text-lg font-semibold mb-4 flex items-center">
+            <span class="text-xl mr-2">📱</span>
+            Telegram 通知配置
+        </h2>
+        <p class="text-gray-500 text-sm mb-4">
+            配置 Telegram Bot 以接收告警通知。你需要创建一个 Bot 并获取 Bot Token 和 Chat ID。
+        </p>
+        
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Bot Token</label>
+                <input type="text" id="telegram-bot-token" 
+                       value="{{ config.get('telegram_bot_token', '') }}"
+                       class="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                       placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Chat ID</label>
+                <input type="text" id="telegram-chat-id"
+                       value="{{ config.get('telegram_chat_id', '') }}"
+                       class="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                       placeholder="你的 Chat ID">
+            </div>
+            <div class="flex items-center space-x-4">
+                <button onclick="saveSettings()" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
+                    保存配置
+                </button>
+                <button onclick="testNotification()" class="px-4 py-2 border rounded hover:bg-gray-50">
+                    测试通知
+                </button>
+            </div>
+            <span id="settings-result" class="text-sm"></span>
+        </div>
+    </div>
+
+    <!-- 采集配置 -->
+    <div class="bg-white rounded-lg shadow p-6">
+        <h2 class="text-lg font-semibold mb-4 flex items-center">
+            <span class="text-xl mr-2">⏱️</span>
+            采集配置
+        </h2>
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">采集间隔（分钟）</label>
+                <input type="number" id="collect-interval" 
+                       value="{{ config.get('collect_interval', 30) }}"
+                       class="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                       min="1" max="1440">
+                <p class="text-xs text-gray-500 mt-1">建议值：5-60 分钟</p>
+            </div>
+            <button onclick="saveSettings()" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
+                保存配置
+            </button>
+        </div>
+    </div>
+
+    <!-- 使用说明 -->
+    <div class="bg-white rounded-lg shadow p-6">
+        <h2 class="text-lg font-semibold mb-4 flex items-center">
+            <span class="text-xl mr-2">📖</span>
+            使用说明
+        </h2>
+        <div class="prose text-sm text-gray-600">
+            <h3 class="text-base font-medium text-gray-800">Telegram Bot 配置</h3>
+            <ol class="list-decimal list-inside space-y-1">
+                <li>在 Telegram 中搜索 @BotFather</li>
+                <li>发送 /newbot 创建新 Bot</li>
+                <li>按照提示设置 Bot 名称</li>
+                <li>复制获得的 Bot Token</li>
+                <li>向你的 Bot 发送一条消息</li>
+                <li>访问 <code>https://api.telegram.org/bot你的TOKEN/getUpdates</code> 获取 Chat ID</li>
+            </ol>
+            
+            <h3 class="text-base font-medium text-gray-800 mt-4">SSH 连接</h3>
+            <p>确保运行运维助手的主机可以 SSH 连接到目标服务器：</p>
+            <ul class="list-disc list-inside space-y-1">
+                <li>密钥认证：将公钥添加到目标服务器的 ~/.ssh/authorized_keys</li>
+                <li>密码认证：直接在添加服务器时输入密码</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- 关于 -->
+    <div class="bg-white rounded-lg shadow p-6">
+        <h2 class="text-lg font-semibold mb-4 flex items-center">
+            <span class="text-xl mr-2">ℹ️</span>
+            关于
+        </h2>
+        <div class="text-gray-600">
+            <p><strong>运维助手</strong> v1.0</p>
+            <p class="text-sm mt-2">轻量级服务器监控与管理平台</p>
+            <ul class="text-sm mt-2 space-y-1">
+                <li>• 服务器状态监控（CPU、内存、磁盘）</li>
+                <li>• Docker 容器管理</li>
+                <li>• 批量命令执行</li>
+                <li>• Telegram 告警通知</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<script>
+function saveSettings() {
+    const data = {
+        telegram_bot_token: document.getElementById('telegram-bot-token').value,
+        telegram_chat_id: document.getElementById('telegram-chat-id').value,
+        collect_interval: parseInt(document.getElementById('collect-interval').value)
+    };
+    
+    fetch('/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+    })
+    .then(r => r.json())
+    .then(result => {
+        const el = document.getElementById('settings-result');
+        el.textContent = '✓ 已保存';
+        el.className = 'text-sm text-green-600';
+        setTimeout(() => el.textContent = '', 2000);
+    })
+    .catch(err => {
+        const el = document.getElementById('settings-result');
+        el.textContent = '保存失败: ' + err;
+        el.className = 'text-sm text-red-600';
+    });
+}
+
+function testNotification() {
+    const token = document.getElementById('telegram-bot-token').value;
+    const chatId = document.getElementById('telegram-chat-id').value;
+    
+    if (!token || !chatId) {
+        alert('请先填写 Bot Token 和 Chat ID');
+        return;
+    }
+    
+    fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            chat_id: chatId,
+            text: '✅ 运维助手通知测试成功！',
+            parse_mode: 'HTML'
+        })
+    })
+    .then(r => r.json())
+    .then(result => {
+        if (result.ok) {
+            const el = document.getElementById('settings-result');
+            el.textContent = '✓ 测试消息已发送';
+            el.className = 'text-sm text-green-600';
+        } else {
+            throw new Error(result.description);
+        }
+    })
+    .catch(err => {
+        const el = document.getElementById('settings-result');
+        el.textContent = '发送失败: ' + err;
+        el.className = 'text-sm text-red-600';
+    });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  yunwei-assistant:
+    build: .
+    container_name: yunwei-assistant
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      # SSH 密钥目录（将你的私钥放在这里）
+      - ./data/keys:/app/data/keys:ro
+    environment:
+      - TZ=Asia/Shanghai

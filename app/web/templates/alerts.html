@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+{% block title %}告警管理 - 运维助手{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <h1 class="text-2xl font-bold">告警管理</h1>
+
+    <!-- 告警阈值配置 -->
+    <div class="bg-white rounded-lg shadow p-6">
+        <h2 class="text-lg font-semibold mb-4">告警阈值配置</h2>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="border rounded p-4">
+                <div class="flex items-center mb-3">
+                    <span class="text-2xl mr-2">💻</span>
+                    <span class="font-medium">CPU 使用率</span>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1">警告阈值</label>
+                        <div class="flex items-center">
+                            <input type="number" id="cpu-warning" value="{{ thresholds|selectattr('metric_type', 'equalto', 'cpu')|map(attribute='warning_threshold')|first }}"
+                                   class="w-full border rounded px-3 py-2 text-center">
+                            <span class="ml-1">%</span>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1">严重阈值</label>
+                        <div class="flex items-center">
+                            <input type="number" id="cpu-critical" value="{{ thresholds|selectattr('metric_type', 'equalto', 'cpu')|map(attribute='critical_threshold')|first }}"
+                                   class="w-full border rounded px-3 py-2 text-center">
+                            <span class="ml-1">%</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="border rounded p-4">
+                <div class="flex items-center mb-3">
+                    <span class="text-2xl mr-2">🧠</span>
+                    <span class="font-medium">内存使用率</span>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1">警告阈值</label>
+                        <div class="flex items-center">
+                            <input type="number" id="memory-warning" value="{{ thresholds|selectattr('metric_type', 'equalto', 'memory')|map(attribute='warning_threshold')|first }}"
+                                   class="w-full border rounded px-3 py-2 text-center">
+                            <span class="ml-1">%</span>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1">严重阈值</label>
+                        <div class="flex items-center">
+                            <input type="number" id="memory-critical" value="{{ thresholds|selectattr('metric_type', 'equalto', 'memory')|map(attribute='critical_threshold')|first }}"
+                                   class="w-full border rounded px-3 py-2 text-center">
+                            <span class="ml-1">%</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="border rounded p-4">
+                <div class="flex items-center mb-3">
+                    <span class="text-2xl mr-2">💾</span>
+                    <span class="font-medium">磁盘使用率</span>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1">警告阈值</label>
+                        <div class="flex items-center">
+                            <input type="number" id="disk-warning" value="{{ thresholds|selectattr('metric_type', 'equalto', 'disk')|map(attribute='warning_threshold')|first }}"
+                                   class="w-full border rounded px-3 py-2 text-center">
+                            <span class="ml-1">%</span>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1">严重阈值</label>
+                        <div class="flex items-center">
+                            <input type="number" id="disk-critical" value="{{ thresholds|selectattr('metric_type', 'equalto', 'disk')|map(attribute='critical_threshold')|first }}"
+                                   class="w-full border rounded px-3 py-2 text-center">
+                            <span class="ml-1">%</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <button onclick="saveThresholds()" class="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
+            保存配置
+        </button>
+        <span id="save-result" class="ml-2 text-sm"></span>
+    </div>
+
+    <!-- 活动告警 -->
+    <div class="bg-white rounded-lg shadow">
+        <div class="px-6 py-4 border-b">
+            <h2 class="text-lg font-semibold flex items-center">
+                <span class="text-xl mr-2">🚨</span>
+                活动告警
+                {% if alerts|length > 0 %}
+                <span class="ml-2 bg-red-500 text-white text-xs rounded-full px-2">{{ alerts|length }}</span>
+                {% endif %}
+            </h2>
+        </div>
+        
+        {% if alerts %}
+        <div class="divide-y">
+            {% for alert in alerts %}
+            <div class="px-6 py-4 hover:bg-gray-50">
+                <div class="flex items-start justify-between">
+                    <div class="flex items-start">
+                        <span class="text-2xl mr-3">
+                            {% if alert.alert_type == 'cpu' %}💻
+                            {% elif alert.alert_type == 'memory' %}🧠
+                            {% else %}💾{% endif %}
+                        </span>
+                        <div>
+                            <div class="flex items-center">
+                                <span class="font-medium">{{ alert.server_name }}</span>
+                                <span class="text-gray-400 text-sm ml-2">({{ alert.host }})</span>
+                                {% if alert.actual_value >= 90 %}
+                                <span class="ml-2 px-2 py-0.5 text-xs rounded bg-red-100 text-red-800">严重</span>
+                                {% else %}
+                                <span class="ml-2 px-2 py-0.5 text-xs rounded bg-yellow-100 text-yellow-800">警告</span>
+                                {% endif %}
+                            </div>
+                            <div class="text-gray-600 mt-1">{{ alert.message }}</div>
+                            <div class="text-xs text-gray-400 mt-1">{{ alert.created_at }}</div>
+                        </div>
+                    </div>
+                    <form action="/alerts/{{ alert.id }}/resolve" method="post">
+                        <button type="submit" class="text-green-500 hover:text-green-700 text-sm">
+                            标记已解决
+                        </button>
+                    </form>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="px-6 py-12 text-center">
+            <div class="text-4xl mb-2">✅</div>
+            <div class="text-gray-500">暂无活动告警</div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+function saveThresholds() {
+    const data = {
+        cpu: {
+            warning: parseInt(document.getElementById('cpu-warning').value),
+            critical: parseInt(document.getElementById('cpu-critical').value)
+        },
+        memory: {
+            warning: parseInt(document.getElementById('memory-warning').value),
+            critical: parseInt(document.getElementById('memory-critical').value)
+        },
+        disk: {
+            warning: parseInt(document.getElementById('disk-warning').value),
+            critical: parseInt(document.getElementById('disk-critical').value)
+        }
+    };
+    
+    fetch('/api/thresholds', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+    })
+    .then(r => r.json())
+    .then(result => {
+        const el = document.getElementById('save-result');
+        el.textContent = '✓ 已保存';
+        el.className = 'ml-2 text-sm text-green-600';
+        setTimeout(() => el.textContent = '', 2000);
+    })
+    .catch(err => {
+        const el = document.getElementById('save-result');
+        el.textContent = '保存失败';
+        el.className = 'ml-2 text-sm text-red-600';
+    });
+}
+</script>
+{% endblock %}

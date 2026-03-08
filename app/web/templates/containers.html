@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+{% block title %}容器管理 - 运维助手{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="flex justify-between items-center">
+        <h1 class="text-2xl font-bold">Docker 容器管理</h1>
+        <button onclick="location.reload()" class="px-4 py-2 border rounded hover:bg-gray-50">
+            刷新
+        </button>
+    </div>
+
+    {% for server_id, data in server_containers.items() %}
+    <div class="bg-white rounded-lg shadow">
+        <div class="px-6 py-4 border-b flex items-center justify-between">
+            <h2 class="text-lg font-semibold flex items-center">
+                <span class="text-xl mr-2">🖥️</span>
+                <a href="/servers/{{ server_id }}" class="text-blue-500 hover:text-blue-700">{{ data.server.name }}</a>
+                <span class="text-gray-400 text-sm ml-2">({{ data.server.host }})</span>
+            </h2>
+            <span class="text-sm text-gray-500">{{ data.containers|length }} 个容器</span>
+        </div>
+        
+        {% if data.error %}
+        <div class="px-6 py-4 text-red-500">
+            获取容器失败: {{ data.error }}
+        </div>
+        {% elif data.containers %}
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">容器名</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">镜像</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">状态</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">端口</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">操作</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y">
+                    {% for container in data.containers %}
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-6 py-4 font-medium">{{ container.name }}</td>
+                        <td class="px-6 py-4 text-gray-600 text-sm">{{ container.image }}</td>
+                        <td class="px-6 py-4">
+                            {% if container.status == 'running' %}
+                            <span class="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">运行中</span>
+                            <div class="text-xs text-gray-400 mt-1">{{ container.status_detail }}</div>
+                            {% else %}
+                            <span class="px-2 py-1 text-xs rounded-full bg-red-100 text-red-800">已停止</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 text-sm text-gray-500">{{ container.ports or '-' }}</td>
+                        <td class="px-6 py-4 space-x-2">
+                            <button onclick="showLogs('{{ server_id }}', '{{ container.name }}')" 
+                                    class="text-blue-500 hover:text-blue-700 text-sm">日志</button>
+                            <button onclick="showCommand('{{ server_id }}', '{{ container.name }}')" 
+                                    class="text-green-500 hover:text-green-700 text-sm">执行</button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="px-6 py-8 text-center text-gray-500">
+            暂无容器
+        </div>
+        {% endif %}
+    </div>
+    {% else %}
+    <div class="bg-white rounded-lg shadow p-12 text-center text-gray-500">
+        暂无服务器或所有服务器无法连接
+        <br>
+        <a href="/servers/add" class="text-blue-500">添加服务器</a>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- 日志弹窗 -->
+<div id="logs-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[80vh] flex flex-col">
+        <div class="px-6 py-4 border-b flex justify-between items-center">
+            <h3 class="font-semibold" id="logs-title">容器日志</h3>
+            <button onclick="closeModal('logs-modal')" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+        </div>
+        <div class="flex-1 overflow-auto p-4 bg-gray-900">
+            <pre id="logs-content" class="text-green-400 text-sm whitespace-pre-wrap"></pre>
+        </div>
+    </div>
+</div>
+
+<!-- 命令弹窗 -->
+<div id="command-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl">
+        <div class="px-6 py-4 border-b flex justify-between items-center">
+            <h3 class="font-semibold" id="command-title">执行命令</h3>
+            <button onclick="closeModal('command-modal')" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+        </div>
+        <div class="p-6">
+            <input type="text" id="command-input" 
+                   class="w-full border rounded px-3 py-2 mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                   placeholder="输入命令">
+            <div class="flex flex-wrap gap-2 mb-4">
+                <button onclick="setCmd('ls -la')" class="px-2 py-1 text-xs border rounded hover:bg-gray-50">ls -la</button>
+                <button onclick="setCmd('cat /etc/hosts')" class="px-2 py-1 text-xs border rounded hover:bg-gray-50">查看hosts</button>
+                <button onclick="setCmd('env')" class="px-2 py-1 text-xs border rounded hover:bg-gray-50">环境变量</button>
+                <button onclick="setCmd('top -bn1 | head -20')" class="px-2 py-1 text-xs border rounded hover:bg-gray-50">进程</button>
+            </div>
+            <button onclick="executeCommand()" class="w-full bg-blue-500 text-white py-2 rounded hover:bg-blue-600">
+                执行
+            </button>
+            <div id="command-result" class="mt-4 p-4 bg-gray-100 rounded hidden">
+                <pre id="command-output" class="text-sm whitespace-pre-wrap max-h-60 overflow-auto"></pre>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentServerId = null;
+let currentContainerName = null;
+
+function closeModal(id) {
+    document.getElementById(id).classList.add('hidden');
+}
+
+function showLogs(serverId, containerName) {
+    document.getElementById('logs-title').textContent = containerName + ' - 日志';
+    document.getElementById('logs-content').textContent = '加载中...';
+    document.getElementById('logs-modal').classList.remove('hidden');
+    
+    fetch(`/api/containers/${serverId}/${containerName}/logs?lines=200`)
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('logs-content').textContent = data.logs || '无日志';
+        })
+        .catch(err => {
+            document.getElementById('logs-content').textContent = '获取日志失败: ' + err;
+        });
+}
+
+function showCommand(serverId, containerName) {
+    currentServerId = serverId;
+    currentContainerName = containerName;
+    document.getElementById('command-title').textContent = containerName + ' - 执行命令';
+    document.getElementById('command-input').value = '';
+    document.getElementById('command-result').classList.add('hidden');
+    document.getElementById('command-modal').classList.remove('hidden');
+}
+
+function setCmd(cmd) {
+    document.getElementById('command-input').value = cmd;
+}
+
+function executeCommand() {
+    const cmd = document.getElementById('command-input').value.trim();
+    if (!cmd) return;
+    
+    document.getElementById('command-result').classList.remove('hidden');
+    document.getElementById('command-output').textContent = '执行中...';
+    
+    fetch(`/api/containers/${currentServerId}/${currentContainerName}/command`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ command: cmd })
+    })
+    .then(r => r.json())
+    .then(data => {
+        let output = '';
+        if (data.stdout) output += data.stdout;
+        if (data.stderr) output += '\n[错误输出]\n' + data.stderr;
+        document.getElementById('command-output').textContent = output || '无输出';
+    })
+    .catch(err => {
+        document.getElementById('command-output').textContent = '执行失败: ' + err;
+    });
+}
+</script>
+{% endblock %}

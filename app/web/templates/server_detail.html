@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+{% block title %}{{ server.name }} - 运维助手{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- 服务器信息 -->
+    <div class="flex justify-between items-start">
+        <div>
+            <h1 class="text-2xl font-bold">{{ server.name }}</h1>
+            <p class="text-gray-500">{{ server.host }}:{{ server.port }} · {{ server.username }}</p>
+        </div>
+        <div class="flex space-x-2">
+            <a href="/servers/{{ server.id }}/edit" class="px-4 py-2 border rounded hover:bg-gray-50">编辑</a>
+            <a href="/servers" class="px-4 py-2 border rounded hover:bg-gray-50">返回列表</a>
+        </div>
+    </div>
+
+    <!-- 系统指标 -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center justify-between mb-4">
+                <span class="text-gray-500">CPU 使用率</span>
+                <span class="text-2xl">💻</span>
+            </div>
+            {% if metrics %}
+            <div class="text-3xl font-bold {% if metrics.cpu_percent >= 90 %}text-red-600{% elif metrics.cpu_percent >= 80 %}text-yellow-600{% else %}text-green-600{% endif %}">
+                {{ metrics.cpu_percent }}%
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-2 mt-2">
+                <div class="h-2 rounded-full {% if metrics.cpu_percent >= 90 %}bg-red-500{% elif metrics.cpu_percent >= 80 %}bg-yellow-500{% else %}bg-green-500{% endif %}" style="width: {{ metrics.cpu_percent }}%"></div>
+            </div>
+            {% else %}
+            <div class="text-gray-400">暂无数据</div>
+            {% endif %}
+        </div>
+
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center justify-between mb-4">
+                <span class="text-gray-500">内存使用率</span>
+                <span class="text-2xl">🧠</span>
+            </div>
+            {% if metrics %}
+            <div class="text-3xl font-bold {% if metrics.memory_percent >= 90 %}text-red-600{% elif metrics.memory_percent >= 80 %}text-yellow-600{% else %}text-green-600{% endif %}">
+                {{ metrics.memory_percent }}%
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-2 mt-2">
+                <div class="h-2 rounded-full {% if metrics.memory_percent >= 90 %}bg-red-500{% elif metrics.memory_percent >= 80 %}bg-yellow-500{% else %}bg-green-500{% endif %}" style="width: {{ metrics.memory_percent }}%"></div>
+            </div>
+            <div class="text-sm text-gray-500 mt-2">{{ metrics.memory_used }}MB / {{ metrics.memory_total }}MB</div>
+            {% else %}
+            <div class="text-gray-400">暂无数据</div>
+            {% endif %}
+        </div>
+
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center justify-between mb-4">
+                <span class="text-gray-500">磁盘使用率</span>
+                <span class="text-2xl">💾</span>
+            </div>
+            {% if metrics and metrics.disk_data %}
+            <div class="space-y-2">
+                {% for disk in metrics.disk_data %}
+                <div>
+                    <div class="flex justify-between text-sm">
+                        <span class="truncate" title="{{ disk.mount }}">{{ disk.mount }}</span>
+                        <span class="{% if disk.percent >= 95 %}text-red-600{% elif disk.percent >= 85 %}text-yellow-600{% endif %}">{{ disk.percent }}%</span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-2">
+                        <div class="h-2 rounded-full {% if disk.percent >= 95 %}bg-red-500{% elif disk.percent >= 85 %}bg-yellow-500{% else %}bg-green-500{% endif %}" style="width: {{ disk.percent }}%"></div>
+                    </div>
+                    <div class="text-xs text-gray-400">{{ disk.used }} / {{ disk.total }}</div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="text-gray-400">暂无数据</div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Docker 容器 -->
+    <div class="bg-white rounded-lg shadow">
+        <div class="px-6 py-4 border-b flex justify-between items-center">
+            <h2 class="text-lg font-semibold flex items-center">
+                <span class="text-xl mr-2">🐳</span>
+                Docker 容器
+            </h2>
+            <button onclick="loadContainers()" class="text-blue-500 hover:text-blue-700 text-sm">
+                刷新
+            </button>
+        </div>
+        <div id="containers-list">
+            {% if containers %}
+            <table class="w-full">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">容器名</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">镜像</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">状态</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">操作</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y">
+                    {% for container in containers %}
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-6 py-4 font-medium">{{ container.name }}</td>
+                        <td class="px-6 py-4 text-gray-600">{{ container.image }}</td>
+                        <td class="px-6 py-4">
+                            {% if container.status == 'running' %}
+                            <span class="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">运行中</span>
+                            {% else %}
+                            <span class="px-2 py-1 text-xs rounded-full bg-red-100 text-red-800">已停止</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 space-x-2">
+                            <button onclick="showLogs('{{ server.id }}', '{{ container.name }}')" class="text-blue-500 hover:text-blue-700">日志</button>
+                            <button onclick="showCommand('{{ server.id }}', '{{ container.name }}')" class="text-green-500 hover:text-green-700">执行命令</button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="px-6 py-12 text-center text-gray-500">
+                暂无容器或无法获取容器信息
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- 日志弹窗 -->
+<div id="logs-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[80vh] flex flex-col">
+        <div class="px-6 py-4 border-b flex justify-between items-center">
+            <h3 class="font-semibold" id="logs-title">容器日志</h3>
+            <button onclick="closeModal('logs-modal')" class="text-gray-500 hover:text-gray-700">&times;</button>
+        </div>
+        <div class="flex-1 overflow-auto p-4 bg-gray-900">
+            <pre id="logs-content" class="text-green-400 text-sm whitespace-pre-wrap"></pre>
+        </div>
+    </div>
+</div>
+
+<!-- 命令弹窗 -->
+<div id="command-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl">
+        <div class="px-6 py-4 border-b flex justify-between items-center">
+            <h3 class="font-semibold" id="command-title">执行命令</h3>
+            <button onclick="closeModal('command-modal')" class="text-gray-500 hover:text-gray-700">&times;</button>
+        </div>
+        <div class="p-6">
+            <input type="text" id="command-input" 
+                   class="w-full border rounded px-3 py-2 mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                   placeholder="输入命令，如：ls -la">
+            <button onclick="executeCommand()" class="w-full bg-blue-500 text-white py-2 rounded hover:bg-blue-600">
+                执行
+            </button>
+            <div id="command-result" class="mt-4 p-4 bg-gray-100 rounded hidden">
+                <pre id="command-output" class="text-sm whitespace-pre-wrap"></pre>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentServerId = null;
+let currentContainerName = null;
+
+function closeModal(id) {
+    document.getElementById(id).classList.add('hidden');
+}
+
+function showLogs(serverId, containerName) {
+    document.getElementById('logs-title').textContent = containerName + ' - 日志';
+    document.getElementById('logs-content').textContent = '加载中...';
+    document.getElementById('logs-modal').classList.remove('hidden');
+    
+    fetch(`/api/containers/${serverId}/${containerName}/logs?lines=200`)
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('logs-content').textContent = data.logs || '无日志';
+        })
+        .catch(err => {
+            document.getElementById('logs-content').textContent = '获取日志失败: ' + err;
+        });
+}
+
+function showCommand(serverId, containerName) {
+    currentServerId = serverId;
+    currentContainerName = containerName;
+    document.getElementById('command-title').textContent = containerName + ' - 执行命令';
+    document.getElementById('command-input').value = '';
+    document.getElementById('command-result').classList.add('hidden');
+    document.getElementById('command-modal').classList.remove('hidden');
+}
+
+function executeCommand() {
+    const cmd = document.getElementById('command-input').value.trim();
+    if (!cmd) return;
+    
+    document.getElementById('command-result').classList.remove('hidden');
+    document.getElementById('command-output').textContent = '执行中...';
+    
+    fetch(`/api/containers/${currentServerId}/${currentContainerName}/command`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ command: cmd })
+    })
+    .then(r => r.json())
+    .then(data => {
+        let output = '';
+        if (data.stdout) output += data.stdout;
+        if (data.stderr) output += '\n[错误输出]\n' + data.stderr;
+        document.getElementById('command-output').textContent = output || '无输出';
+    })
+    .catch(err => {
+        document.getElementById('command-output').textContent = '执行失败: ' + err;
+    });
+}
+</script>
+{% endblock %}

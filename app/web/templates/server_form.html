@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}{% if is_edit %}编辑服务器{% else %}添加服务器{% endif %} - 运维助手{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+    <h1 class="text-2xl font-bold mb-6">{% if is_edit %}编辑服务器{% else %}添加服务器{% endif %}</h1>
+
+    <div class="bg-white rounded-lg shadow p-6">
+        <form action="/servers/{% if is_edit %}{{ server.id }}/edit{% else %}add{% endif %}" method="post" class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">服务器名称</label>
+                <input type="text" name="name" required
+                       value="{{ server.name if server else '' }}"
+                       class="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                       placeholder="例如：生产服务器1">
+            </div>
+
+            <div class="grid grid-cols-3 gap-4">
+                <div class="col-span-2">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">主机地址</label>
+                    <input type="text" name="host" required
+                           value="{{ server.host if server else '' }}"
+                           class="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                           placeholder="192.168.1.100">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">端口</label>
+                    <input type="number" name="port" value="{{ server.port if server else 22 }}"
+                           class="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">用户名</label>
+                <input type="text" name="username" value="{{ server.username if server else 'root' }}"
+                       class="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">认证方式</label>
+                <div class="flex space-x-4">
+                    <label class="flex items-center">
+                        <input type="radio" name="auth_type" value="key" 
+                               {% if not server or server.auth_type == 'key' %}checked{% endif %}
+                               onchange="toggleAuthFields()"
+                               class="mr-2">
+                        SSH 密钥
+                    </label>
+                    <label class="flex items-center">
+                        <input type="radio" name="auth_type" value="password"
+                               {% if server and server.auth_type == 'password' %}checked{% endif %}
+                               onchange="toggleAuthFields()"
+                               class="mr-2">
+                        密码
+                    </label>
+                </div>
+            </div>
+
+            <div id="key-fields">
+                <label class="block text-sm font-medium text-gray-700 mb-1">SSH 密钥</label>
+                <div class="flex space-x-4 mb-2">
+                    <label class="flex items-center">
+                        <input type="radio" name="key_input_type" value="file" checked onchange="toggleKeyInput()" class="mr-2">
+                        密钥文件名
+                    </label>
+                    <label class="flex items-center">
+                        <input type="radio" name="key_input_type" value="content" onchange="toggleKeyInput()" class="mr-2">
+                        粘贴密钥内容
+                    </label>
+                </div>
+                
+                <div id="key-file-input">
+                    <input type="text" name="key_path"
+                           value="{{ server.key_path if server and server.key_path else '' }}"
+                           class="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                           placeholder="例如：server1.pem（文件放在 data/keys/ 目录）">
+                    <p class="text-xs text-gray-400 mt-1">将 .pem 或 .key 文件放在 data/keys/ 目录，填写文件名</p>
+                </div>
+                
+                <div id="key-content-input" style="display: none;">
+                    <textarea name="key_content" rows="6"
+                              class="w-full border rounded px-3 py-2 font-mono text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              placeholder="-----BEGIN RSA PRIVATE KEY-----
+MIIEpAIBAAKCAQEA...
+-----END RSA PRIVATE KEY-----">{{ server.key_content if server and server.key_content else '' }}</textarea>
+                    <p class="text-xs text-gray-400 mt-1">直接粘贴 PEM 格式私钥内容</p>
+                </div>
+            </div>
+
+            <div id="password-field" style="display: none;">
+                <label class="block text-sm font-medium text-gray-700 mb-1">密码</label>
+                <input type="password" name="password"
+                       value="{{ server.password if server else '' }}"
+                       class="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+
+            <div class="flex items-center">
+                <input type="checkbox" name="enabled" id="enabled"
+                       {% if not server or server.enabled %}checked{% endif %}
+                       class="mr-2">
+                <label for="enabled" class="text-sm text-gray-700">启用监控</label>
+            </div>
+
+            <div class="flex justify-end space-x-4 pt-4 border-t">
+                <a href="/servers" class="px-4 py-2 border rounded hover:bg-gray-50">取消</a>
+                <button type="submit" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
+                    {% if is_edit %}保存{% else %}添加{% endif %}
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function toggleAuthFields() {
+    const authType = document.querySelector('input[name="auth_type"]:checked').value;
+    document.getElementById('key-fields').style.display = authType === 'key' ? 'block' : 'none';
+    document.getElementById('password-field').style.display = authType === 'password' ? 'block' : 'none';
+}
+
+function toggleKeyInput() {
+    const inputType = document.querySelector('input[name="key_input_type"]:checked').value;
+    document.getElementById('key-file-input').style.display = inputType === 'file' ? 'block' : 'none';
+    document.getElementById('key-content-input').style.display = inputType === 'content' ? 'block' : 'none';
+}
+
+toggleAuthFields();
+toggleKeyInput();
+</script>
+{% endblock %}

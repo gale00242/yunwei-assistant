@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}运维助手{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <style>
+        .htmx-request .htmx-indicator { display: inline-block; }
+        .htmx-indicator { display: none; }
+    </style>
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <!-- 导航栏 -->
+    <nav class="bg-slate-800 text-white shadow-lg">
+        <div class="max-w-7xl mx-auto px-4">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center space-x-8">
+                    <a href="/" class="text-xl font-bold flex items-center">
+                        <span class="text-2xl mr-2">🖥️</span>
+                        运维助手
+                    </a>
+                    <div class="hidden md:flex space-x-4">
+                        <a href="/" class="px-3 py-2 rounded hover:bg-slate-700 {% if request.url.path == '/' %}bg-slate-700{% endif %}">仪表盘</a>
+                        <a href="/servers" class="px-3 py-2 rounded hover:bg-slate-700 {% if '/servers' in request.url.path %}bg-slate-700{% endif %}">服务器</a>
+                        <a href="/containers" class="px-3 py-2 rounded hover:bg-slate-700 {% if request.url.path == '/containers' %}bg-slate-700{% endif %}">容器</a>
+                        <a href="/commands" class="px-3 py-2 rounded hover:bg-slate-700 {% if request.url.path == '/commands' %}bg-slate-700{% endif %}">批量命令</a>
+                        <a href="/alerts" class="px-3 py-2 rounded hover:bg-slate-700 {% if request.url.path == '/alerts' %}bg-slate-700{% endif %}">告警</a>
+                        <a href="/settings" class="px-3 py-2 rounded hover:bg-slate-700 {% if request.url.path == '/settings' %}bg-slate-700{% endif %}">设置</a>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-4">
+                    {% if alerts_count is defined and alerts_count > 0 %}
+                    <a href="/alerts" class="flex items-center text-red-400 hover:text-red-300">
+                        <span class="text-xl">🚨</span>
+                        <span class="ml-1 bg-red-500 text-white text-xs rounded-full px-2">{{ alerts_count }}</span>
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 主内容 -->
+    <main class="max-w-7xl mx-auto px-4 py-6">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- 页脚 -->
+    <footer class="fixed bottom-0 left-0 right-0 bg-slate-800 text-gray-400 text-center py-2 text-sm">
+        运维助手 v1.0 | 服务器监控与管理平台
+    </footer>
+
+    {% block extra_script %}{% endblock %}
+</body>
+</html>
