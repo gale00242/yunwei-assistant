@@ -43,7 +43,7 @@ def get_key_files() -> List[str]:
 
 # 全局变量
 scheduler_task = None
-collect_interval = 30 * 60  # 30 分钟
+collect_interval = None  # 将从配置文件加载
 
 
 @asynccontextmanager
@@ -53,7 +53,9 @@ async def lifespan(app: FastAPI):
     await init_db()
     
     # 加载配置并初始化通知器
+    global collect_interval
     config = await load_config()
+    collect_interval = (config.get('collect_interval', 30) or 30) * 60  # 分钟转秒
     if config.get('telegram_bot_token') and config.get('telegram_chat_id'):
         init_notifier(config['telegram_bot_token'], config['telegram_chat_id'])
     
