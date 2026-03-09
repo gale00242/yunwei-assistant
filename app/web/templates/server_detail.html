@@ -176,7 +176,7 @@ function showLogs(serverId, containerName) {
     document.getElementById('logs-content').textContent = '加载中...';
     document.getElementById('logs-modal').classList.remove('hidden');
     
-    fetch(`/api/containers/${serverId}/${containerName}/logs?lines=200`)
+    fetch(`/api/containers/${serverId}/${containerName}/logs?since=30m`, { credentials: 'include' })
         .then(r => r.json())
         .then(data => {
             document.getElementById('logs-content').textContent = data.logs || '无日志';
@@ -203,8 +203,10 @@ function executeCommand() {
     document.getElementById('command-output').textContent = '执行中...';
     
     fetch(`/api/containers/${currentServerId}/${currentContainerName}/command`, {
+        credentials: 'include',
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ command: cmd })
     })
     .then(r => r.json())

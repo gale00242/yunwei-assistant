@@ -167,8 +167,10 @@ function executeCommand() {
     document.getElementById('results-container').innerHTML = '<p class="text-gray-500 text-center py-8">执行中...</p>';
     
     fetch('/api/commands/execute', {
+        credentials: 'include',
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ command: command, server_ids: serverIds })
     })
     .then(r => r.json())
@@ -206,7 +208,8 @@ function clearHistory() {
     if (!confirm('确定要清空所有执行历史吗？此操作不可恢复。')) return;
     
     fetch('/api/commands/clear', {
-        method: 'POST'
+        method: 'POST',
+        credentials: 'include'
     })
     .then(r => r.json())
     .then(data => {

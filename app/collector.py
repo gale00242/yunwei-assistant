@@ -163,14 +163,35 @@ async def execute_container_command(
 async def get_container_logs(
     server: Dict[str, Any],
     container_name: str,
-    lines: int = 100
+    lines: int = 100,
+    since: str = None
 ) -> str:
     """
     获取容器日志
+    
+    Args:
+        server: 服务器配置
+        container_name: 容器名称
+        lines: 日志行数（当 since 未指定时使用）
+        since: 时间范围，如 "30m", "1h", "2h"
     """
-    command = f"docker logs --tail {lines} {container_name}"
-    exit_code, stdout, stderr = await ssh_client.execute_async(server, command)
-    return stdout + stderr
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    # 优先使用 since 参数，默认查最近30分钟
+    if since:
+        command = f"docker logs --since {since} {container_name}"
+    else:
+        command = f"docker logs --tail {lines} {container_name}"
+    
+    try:
+        exit_code, stdout, stderr = await ssh_client.execute_async(server, command, timeout=60)
+        result = stdout + stderr
+        logger.debug(f"容器日志获取成功: {container_name}, {len(result)} 字符")
+        return result
+    except Exception as e:
+        logger.error(f"容器日志获取失败: {container_name}, error={e}")
+        raise
 
 
 async def restart_container(

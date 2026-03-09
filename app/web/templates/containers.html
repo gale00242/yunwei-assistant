@@ -135,7 +135,7 @@ function loadContainers() {
     document.getElementById('no-containers').classList.add('hidden');
     document.getElementById('server-name').textContent = currentServerName;
     
-    fetch(`/api/servers/${serverId}/containers`)
+    fetch(`/api/servers/${serverId}/containers`, { credentials: 'include' }, { credentials: 'include' })
         .then(r => r.json())
         .then(data => {
             document.getElementById('containers-loading').classList.add('hidden');
@@ -198,7 +198,7 @@ function showLogs(serverId, containerName) {
     document.getElementById('restart-btn').classList.remove('hidden');
     document.getElementById('logs-modal').classList.remove('hidden');
     
-    fetch(`/api/containers/${serverId}/${containerName}/logs?lines=100`)
+    fetch(`/api/containers/${serverId}/${containerName}/logs?since=30m`, { credentials: 'include' })
         .then(r => r.json())
         .then(data => {
             document.getElementById('logs-content').textContent = data.logs || '无日志';
@@ -216,7 +216,8 @@ function restartContainer(serverId, containerName) {
     document.getElementById('logs-modal').classList.remove('hidden');
     
     fetch(`/api/containers/${serverId}/${containerName}/restart`, {
-        method: 'POST'
+        method: 'POST',
+        credentials: 'include'
     })
     .then(r => r.json())
     .then(data => {
@@ -237,7 +238,8 @@ function stopContainer(serverId, containerName) {
     if (!confirm(`确定要停止容器 ${containerName} 吗？`)) return;
     
     fetch(`/api/containers/${serverId}/${containerName}/stop`, {
-        method: 'POST'
+        method: 'POST',
+        credentials: 'include'
     })
     .then(r => r.json())
     .then(data => {
@@ -254,7 +256,8 @@ function stopContainer(serverId, containerName) {
 
 function startContainer(serverId, containerName) {
     fetch(`/api/containers/${serverId}/${containerName}/start`, {
-        method: 'POST'
+        method: 'POST',
+        credentials: 'include'
     })
     .then(r => r.json())
     .then(data => {
@@ -291,6 +294,7 @@ function executeCommand() {
     fetch(`/api/containers/${currentServerId}/${currentContainerName}/command`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ command: cmd })
     })
     .then(r => r.json())

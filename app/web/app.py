@@ -576,18 +576,31 @@ async def container_command(server_id: int, container_name: str, request: Reques
 
 
 @app.get("/api/containers/{server_id}/{container_name}/logs")
-async def container_logs(server_id: int, container_name: str, lines: int = 100):
-    """获取容器日志"""
+async def container_logs(server_id: int, container_name: str, lines: int = 100, since: str = "30m"):
+    """获取容器日志
+    
+    Args:
+        lines: 备用参数，当 since 未指定时使用
+        since: 时间范围，默认30分钟。支持格式: 30m, 1h, 2h 等
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
     server = await get_server(server_id)
     if not server:
         return JSONResponse({"error": "服务器不存在"}, status_code=404)
     
     try:
-        logs = await get_container_logs(server, container_name, lines)
-        ssh_client.disconnect(server_id)
+        logger.info(f"获取容器日志: server={server_id}, container={container_name}, since={since}")
+        logs = await get_container_logs(server, container_name, lines=lines, since=since)
+        logger.info(f"获取容器日志成功: {len(logs)} 字符")
         return JSONResponse({"logs": logs})
+    except asyncio.TimeoutError:
+        logger.error(f"获取容器日志超时: server={server_id}, container={container_name}")
+        return JSONResponse({"error": "获取日志超时，请稍后重试"}, status_code=504)
     except Exception as e:
-        return JSONResponse({"error": str(e)})
+        logger.error(f"获取容器日志失败: server={server_id}, container={container_name}, error={e}")
+        return JSONResponse({"error": f"获取日志失败: {str(e)}"}, status_code=500)
 
 
 @app.post("/api/containers/{server_id}/{container_name}/restart")

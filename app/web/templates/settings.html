@@ -117,6 +117,7 @@ function saveSettings() {
     };
     
     fetch('/settings', {
+        credentials: 'include',
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
@@ -145,6 +146,7 @@ function testNotification() {
     }
     
     fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        credentials: 'include',
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
