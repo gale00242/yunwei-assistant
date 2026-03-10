@@ -130,35 +130,35 @@
 </div>
 
 <!-- 日志弹窗 -->
-<div id="logs-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
+<div id="logs-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50" onclick="if(event.target===this)closeModal('logs-modal')">
     <div class="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[80vh] flex flex-col">
-        <div class="px-6 py-4 border-b flex justify-between items-center">
+        <div class="px-6 py-4 border-b flex justify-between items-center shrink-0">
             <h3 class="font-semibold" id="logs-title">容器日志</h3>
-            <button onclick="closeModal('logs-modal')" class="text-gray-500 hover:text-gray-700">&times;</button>
+            <button onclick="closeModal('logs-modal')" class="text-gray-500 hover:text-gray-700 text-2xl leading-none">&times;</button>
         </div>
-        <div class="flex-1 overflow-auto p-4 bg-gray-900">
+        <div class="flex-1 overflow-auto p-4 bg-gray-900 min-h-0">
             <pre id="logs-content" class="text-green-400 text-sm whitespace-pre-wrap"></pre>
         </div>
     </div>
 </div>
 
 <!-- 命令弹窗 -->
-<div id="command-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
-    <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl">
-        <div class="px-6 py-4 border-b flex justify-between items-center">
+<div id="command-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50" onclick="if(event.target===this)closeModal('command-modal')">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+        <div class="px-6 py-4 border-b flex justify-between items-center shrink-0">
             <h3 class="font-semibold" id="command-title">执行命令</h3>
-            <button onclick="closeModal('command-modal')" class="text-gray-500 hover:text-gray-700">&times;</button>
+            <button onclick="closeModal('command-modal')" class="text-gray-500 hover:text-gray-700 text-2xl leading-none">&times;</button>
         </div>
-        <div class="p-6">
+        <div class="p-6 shrink-0">
             <input type="text" id="command-input" 
                    class="w-full border rounded px-3 py-2 mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
                    placeholder="输入命令，如：ls -la">
             <button onclick="executeCommand()" class="w-full bg-blue-500 text-white py-2 rounded hover:bg-blue-600">
                 执行
             </button>
-            <div id="command-result" class="mt-4 p-4 bg-gray-100 rounded hidden">
-                <pre id="command-output" class="text-sm whitespace-pre-wrap"></pre>
-            </div>
+        </div>
+        <div id="command-result" class="px-6 pb-6 hidden overflow-auto flex-1 min-h-0">
+            <pre id="command-output" class="p-4 bg-gray-900 text-green-400 text-sm whitespace-pre-wrap rounded max-h-[50vh] overflow-auto"></pre>
         </div>
     </div>
 </div>
