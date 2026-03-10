@@ -15,8 +15,8 @@
             <thead class="bg-gray-50">
                 <tr>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">名称</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">地址</th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">认证方式</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">状态</th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">状态</th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">操作</th>
                 </tr>
@@ -30,7 +30,7 @@
                         </a>
                     </td>
                     <td class="px-6 py-4 text-gray-600">
-                        {{ server.host }}:{{ server.port }}
+                        {% if server.auth_type == 'key' %}密钥{% else %}密码{% endif %}
                     </td>
                     <td class="px-6 py-4">
                         {% if server.auth_type == 'key' %}

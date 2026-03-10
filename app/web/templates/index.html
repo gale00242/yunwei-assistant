@@ -78,7 +78,7 @@
                 <div class="flex items-center">
                     <span class="text-2xl mr-3">{% if alert.alert_type == 'cpu' %}💻{% elif alert.alert_type == 'memory' %}🧠{% else %}💾{% endif %}</span>
                     <div>
-                        <div class="font-medium">{{ alert.server_name }} ({{ alert.host }})</div>
+                        <div class="font-medium">{{ alert.server_name }}</div>
                         <div class="text-sm text-gray-500">{{ alert.message }}</div>
                         <div class="text-xs text-gray-400">{{ alert.created_at }}</div>
                     </div>
@@ -117,7 +117,7 @@
                             <a href="/servers/{{ server.id }}" class="text-blue-500 hover:text-blue-700 font-medium">
                                 {{ server.name }}
                             </a>
-                            <div class="text-sm text-gray-500">{{ server.host }}:{{ server.port }}</div>
+                            <div class="text-sm text-gray-500">{{ server.name }}</div>
                         </td>
                         <td class="px-6 py-4">
                             {% if server.enabled %}
